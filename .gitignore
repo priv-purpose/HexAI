@@ -1,0 +1,6 @@
+# ignore any image files I made
+*.png
+*.jpg
+
+# ignore python compile files
+*.pyc
