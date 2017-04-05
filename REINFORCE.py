@@ -274,8 +274,7 @@ ba.import_val('HexBrain.pkl')
 print ' ... initializing env'
 
 cho = RandomHexPlayer()
-cho.runEp(opponent = ba.as_func)
-#res, res_order = logGames(ba, cho, game_num = 1000)
-#print res
+res, res_order = logGames(ba, cho, game_num = 1000)
+print res
 #graphWins(res_order, games_over = 50, title='continue_train3')
 ba.export_val('HexBrain.pkl')
