@@ -41,8 +41,8 @@ class HexConvLayer(object):
         )
         # elig trace
         self.W_e = theano.shared(
-            value = np.zeros(filter_shape),
-            borrow = True
+            value = np.zeros(filter_shape, dtype = theano.config.floatX),
+            borrow = True,
         )
         b_values = np.zeros((filter_shape[0],), dtype = theano.config.floatX)
         self.b = theano.shared(value = b_values, borrow = True)
@@ -88,7 +88,7 @@ class HexEndConvLayer(object):
             borrow = True
         )
         self.W_e = theano.shared(
-            value = np.zeros(filter_shape),
+            value = np.zeros(filter_shape, dtype = theano.config.floatX),
             borrow = True
         )
         # now things get different
