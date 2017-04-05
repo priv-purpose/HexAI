@@ -4,3 +4,6 @@
 
 # ignore python compile files
 *.pyc
+
+# ignore pkl files for now
+*.pkl

@@ -248,21 +248,34 @@ class REINFORCEHexPlayer(object):
     
     def as_func(self, board):
         return self.make_move(board)
+    
+    def export_val(self, fname):
+        import cPickle
+        f = open(fname, 'wb')
+        cPickle.dump([p.get_value() for p in self.params], f)
+        f.close()
+    
+    def import_val(self, fname):
+        import cPickle
+        f = open(fname, 'rb')
+        vals = cPickle.load(f)
+        for p, val in zip(self.params, vals):
+            p.set_value(val)
+        f.close()
 
     
 inpt = T.tensor3()
 baba = inpt.reshape((1, 3, 11, 11))
-rng = np.random.RandomState(1231) # I'm okay with this
+rng = np.random.RandomState(1236) # I'm okay with this
 
 print ' ... building REINFORCE '
-ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .001) 
-#ko = np.zeros((3, 11, 11))
-#ko[2][1][1] = 1
-ko = np.ones((3, 11, 11))
+ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0003) 
+ba.import_val('HexBrain.pkl')
 print ' ... initializing env'
 
 cho = RandomHexPlayer()
-
-res, res_order = logGames(ba, cho)
-
-graphWins(res_order, games_over = 50, title = 'random players')
+cho.runEp(opponent = ba.as_func)
+#res, res_order = logGames(ba, cho, game_num = 1000)
+#print res
+#graphWins(res_order, games_over = 50, title='continue_train3')
+ba.export_val('HexBrain.pkl')
