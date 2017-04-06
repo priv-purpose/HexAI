@@ -6,4 +6,4 @@
 *.pyc
 
 # ignore pkl files for now
-*.pkl
+# *.pkl

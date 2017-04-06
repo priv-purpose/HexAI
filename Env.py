@@ -26,6 +26,7 @@ class ModHexEnv(HexEnv):
         }
         try:
             self.player_color = colormap[player_color]
+            self.real_player_color = player_color
         except KeyError:
             raise error.Error("player_color must be 'black' or 'white', not {}".format(player_color))
 

@@ -58,7 +58,7 @@ class HumanHexPlayer(object):
     def as_func(self, board):
         pass
 
-def logGames(player1, player2, game_num = 1000):
+def logGames(player1, player2, game_num = 100):
     '''plays game_num games with player1 and player2. 
     returns a tuple where the first entry is the number of times player1 won,
     and the second entry is the number of times player2 won. '''
@@ -71,6 +71,7 @@ def logGames(player1, player2, game_num = 1000):
         game_res = player1.runEp(opponent = player2.as_func)
         res[game_res] += 1
         res_order.append(game_res)
+    t.set_description('%03d:%03d ' % (res[1], res[-1]))
     return (res[1.], res[-1.]), res_order
 
 def graphWins(res_order, games_over = 20, title = ''):

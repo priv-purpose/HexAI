@@ -3,13 +3,13 @@
 '''Hex REINFORCE implementation
 But really, it's annoying that network implementation seems so hard'''
 
-from Env import HexGameEnv
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv2d, relu
 import numpy as np
-import itertools
+import itertools, time, random, os
 
+from Env import HexGameEnv
 from MLP import HiddenLayer
 from Random import *
 
@@ -228,13 +228,16 @@ class REINFORCEHexPlayer(object):
     def make_move(self, env_input):
         lgl_mvs = self.legal_moves(env_input)
         probs = self.f_pass(env_input, lgl_mvs)[0]
+        #print np.max(probs)
         select = np.random.choice(range(BOARD_SIZE**2), p = probs)
         self.elig_updator(env_input, lgl_mvs, select)
         return select
     
-    def runEp(self, opponent = 'random'):
+    def runEp(self, opponent = 'random', verbose = False):
         '''not finished runEp'''
         env = HexGameEnv(opponent)
+        if verbose:
+            print 'REINFORCE is %s' % env.real_player_color
         board = env.get_board()
         end = env.game_finished(board)
         
@@ -242,12 +245,18 @@ class REINFORCEHexPlayer(object):
         while not end:
             move = self.make_move(ns)
             ns, rw, end, _ = env.step(move)
+            if verbose:
+                env.render()
+                time.sleep(2)
         self.val_updator(rw)
         self.elig_clear()
         return rw
     
     def as_func(self, board):
-        return self.make_move(board)
+        lgl_mvs = self.legal_moves(board)
+        probs = self.f_pass(board, lgl_mvs)[0]    
+        select = np.random.choice(range(BOARD_SIZE**2), p = probs)
+        return select
     
     def export_val(self, fname):
         import cPickle
@@ -263,18 +272,61 @@ class REINFORCEHexPlayer(object):
             p.set_value(val)
         f.close()
 
+def ensembleTrain(re_player, seeds, save_prefix,
+                  game_num = 1000, save_interval = 100):
+    ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0001)
+    ba.import_val('brains/HexBrain2e3.pkl')
     
-inpt = T.tensor3()
-baba = inpt.reshape((1, 3, 11, 11))
+    res = {1.:0, -1.:0}
+    res_order = []
+    t = trange(game_num, desc='Bar desc', leave = True)
+    for i in t:
+        if i % 20 == 0:
+            t.set_description('%03d:%03d ' % (res[1], res[-1]))
+        oppo = random.choice(seeds)
+        #print oppo
+        game_res = re_player.runEp(opponent = oppo.as_func)
+        res[game_res] += 1
+        res_order.append(game_res)
+        if i != 0 and i % save_interval == 0:
+            ba.export_val(save_prefix + str(i) + '.pkl')
+            new = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+            new.import_val(save_prefix + str(i) + '.pkl')
+            seeds.append(new)
+    t.set_description('%03d:%03d ' % (res[1], res[-1]))
+    ba.export_val(save_prefix + '_final.pkl')
+    return res, res_order
+    
+
 rng = np.random.RandomState(1236) # I'm okay with this
 
-print ' ... building REINFORCE '
 ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0003) 
-ba.import_val('HexBrain.pkl')
-print ' ... initializing env'
+ba.import_val('brains/HBSP4__final.pkl')
+#ba.import_val('HBSP3__final.pkl')
 
-cho = RandomHexPlayer()
-res, res_order = logGames(ba, cho, game_num = 1000)
-print res
-#graphWins(res_order, games_over = 50, title='continue_train3')
-ba.export_val('HexBrain.pkl')
+dbg = False
+brain_dir = 'brains/'
+
+print ' ... generating opponents'
+oppos = [RandomHexPlayer()]
+for f_name in os.listdir(brain_dir):
+    if f_name[-3:] != 'pkl': continue
+    op = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+    op.import_val(brain_dir + f_name)
+    oppos.append(op)
+print len(oppos), 'opponents generated'
+
+ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+ref_oppo.import_val(brain_dir + 'HexBrain2e3.pkl')
+
+if dbg:
+    res = ba.runEp(opponent = RandomHexPlayer().as_func, verbose = True)
+    print res
+else:
+    res, res_order = ensembleTrain(ba, oppos, brain_dir + 'HBSP5_', 
+                                   2000, 500)
+    print res
+    graphWins(res_order, games_over = 50, title='tmp_monitor')
+    logGames(ba, ref_oppo)
+
+#logGames(ba, RandomHexPlayer())
