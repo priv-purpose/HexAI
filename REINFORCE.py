@@ -274,9 +274,6 @@ class REINFORCEHexPlayer(object):
 
 def ensembleTrain(re_player, seeds, save_prefix,
                   game_num = 1000, save_interval = 100):
-    ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0001)
-    ba.import_val('brains/HexBrain2e3.pkl')
-    
     res = {1.:0, -1.:0}
     res_order = []
     t = trange(game_num, desc='Bar desc', leave = True)
@@ -289,20 +286,19 @@ def ensembleTrain(re_player, seeds, save_prefix,
         res[game_res] += 1
         res_order.append(game_res)
         if i != 0 and i % save_interval == 0:
-            ba.export_val(save_prefix + str(i) + '.pkl')
+            re_player.export_val(save_prefix + str(i) + '.pkl')
             new = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
             new.import_val(save_prefix + str(i) + '.pkl')
             seeds.append(new)
     t.set_description('%03d:%03d ' % (res[1], res[-1]))
-    ba.export_val(save_prefix + '_final.pkl')
+    re_player.export_val(save_prefix + '_final.pkl')
     return res, res_order
     
 
 rng = np.random.RandomState(1236) # I'm okay with this
 
 ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0003) 
-ba.import_val('brains/HBSP4__final.pkl')
-#ba.import_val('HBSP3__final.pkl')
+ba.import_val('brains/HexBrain2e3.pkl')
 
 dbg = False
 brain_dir = 'brains/'
@@ -323,8 +319,8 @@ if dbg:
     res = ba.runEp(opponent = RandomHexPlayer().as_func, verbose = True)
     print res
 else:
-    res, res_order = ensembleTrain(ba, oppos, brain_dir + 'HBSP5_', 
-                                   2000, 500)
+    res, res_order = ensembleTrain(ba, oppos, brain_dir + 'HBSP01_', 
+                                   5000, 500)
     print res
     graphWins(res_order, games_over = 50, title='tmp_monitor')
     logGames(ba, ref_oppo)
