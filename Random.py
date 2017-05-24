@@ -30,7 +30,7 @@ class RandomHexPlayer(object):
         poss_moves = list(compress(xrange(BOARD_SIZE**2), blank))
         try:
             return random.choice(poss_moves)
-        except ValueError:
+        except IndexError:
             return BOARD_SIZE**2
 
 class HumanHexPlayer(object):
