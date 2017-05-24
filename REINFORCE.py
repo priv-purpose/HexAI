@@ -334,7 +334,6 @@ def ensembleTrain(re_player, seeds, save_prefix,
 	                             learn_rate = 0.)
             new.import_val(save_prefix + str(i) + '.pkl')
             seeds.append(new)
-    t.set_description('%03d:%03d ' % (res[1], res[-1]))
     re_player.export_val(save_prefix + '_final.pkl')
     # doesn't return anything
 
