@@ -15,6 +15,21 @@ from Random import *
 
 ## Global variable (somewhat nuisance, later make it all come from main)
 BOARD_SIZE = 11
+LAYER_NUM = 2
+
+## Shortcuts
+dbg = False
+brain_dir = 'brains/'
+init_brain = 'HBSP06__final.pkl'
+dbg_oppo_brain = 'HBSP01__final.pkl'
+new_batch_prefix = 'test_batch'
+train_num = 10
+minibatch_size = 100
+
+print 'Initialized with', init_brain
+print 'new_batch_prefix:', new_batch_prefix
+print 'train_num:', train_num
+print 'batch_size:', minibatch_size
 
 class HexConvLayer(object):
     '''Hex Convolutional layer imitating alphago
@@ -71,7 +86,7 @@ class HexEndConvLayer(object):
         This layer yields a 1d array with size BOARD_SIZE**2
         
         After this network, you add rule-keeping softmax'''
-        filter_shape = (1, image_shape[1], 1, 1)
+        filter_shape = (1, image_shape[1], 1, 1) # TODO > Inappropriate for batch
         
         fan_in = np.prod(filter_shape[1:])
         fan_out = (filter_shape[0] * np.prod(filter_shape[2:]))
@@ -180,6 +195,7 @@ class REINFORCEHexPlayer(object):
         self.selected = T.scalar(dtype = 'int32')
         self.g = prob[(0, self.selected)]
         reward = T.dscalar()
+	batch_size = T.dscalar()
         
         # stuff for functions
         param_pre_list = [layer.params for layer in self.layers]
@@ -199,11 +215,18 @@ class REINFORCEHexPlayer(object):
             updates = [(elig, lmbda*elig + self.elig_calc(param))
                        for elig, param in zip(self.eligs, self.params)]
         )
+	
+	self.elig_finalize = theano.function(
+	    inputs = [reward],
+	    outputs = None,
+	    updates = [(elig, (reward-self.base_r)*elig)
+	               for elig in self.eligs]
+	)
         
         self.val_updator = theano.function(
-            inputs = [reward],
+            inputs = [batch_size],
             outputs = None,
-            updates = [(param, self.R_update(param, reward, elig))
+            updates = [(param, self.val_calc(param, elig, batch_size))
                        for elig, param in zip(self.eligs, self.params)]
         )
         
@@ -217,8 +240,8 @@ class REINFORCEHexPlayer(object):
         '''calculates the elig related to theta'''
         return T.grad(T.log(self.g), wrt=theta)
     
-    def R_update(self, theta, reward, elig):
-        return theta + self.learn_rate*(reward-self.base_r)*elig
+    def val_calc(self, theta, elig, batch_size):
+	return theta + (self.learn_rate/batch_size)*elig
     
     def legal_moves(self, env_input):
         '''computes legal moves from the env input. 
@@ -247,14 +270,31 @@ class REINFORCEHexPlayer(object):
             ns, rw, end, _ = env.step(move)
             if verbose:
                 env.render()
-                time.sleep(2)
-        self.val_updator(rw)
-        self.elig_clear()
+                lgl_mvs = self.legal_moves(ns)
+                probs = self.f_pass(ns, lgl_mvs)[0]
+                np.set_printoptions(formatter={'float': '{: .2f}'.format})
+                print np.array(probs.reshape((BOARD_SIZE, BOARD_SIZE)))
+                raw_input('Enter to see next move')
+        #self.val_updator(rw) # gone, because of batch learning
+        self.elig_finalize(rw) # finalize elig with reward
         return rw
+    
+    def runBatch(self, oppos, batch_size = minibatch_size):
+	res = {1.: 0, -1.: 0}
+	for i in xrange(batch_size):
+	    oppo = random.choice(oppos) # choose randomly from opponent list
+	    tmp_res = self.runEp(opponent = oppo.as_func)
+	    res[tmp_res] += 1
+	# now, batch_size-worth elig is kept in eligs. this is resolved:
+	self.val_updator(batch_size)
+	self.elig_clear()
+	# now elig is clear, and we are ready for next batch. 
+	# return res to show progress. 
+	return res
     
     def as_func(self, board):
         lgl_mvs = self.legal_moves(board)
-        probs = self.f_pass(board, lgl_mvs)[0]    
+        probs = self.f_pass(board, lgl_mvs)[0]
         select = np.random.choice(range(BOARD_SIZE**2), p = probs)
         return select
     
@@ -272,57 +312,79 @@ class REINFORCEHexPlayer(object):
             p.set_value(val)
         f.close()
 
+class REINFORCEHexPriorGenerator(REINFORCEHexPlayer):
+    '''Class to generate prior distribution for MCTS, identical to REINFORCE
+    except for below function'''
+    def prior_dist(self, board):
+        '''returns probs'''
+        lgl_mvs = self.legal_moves(board)
+        return self.f_pass(board, lgl_mvs)[0]
+
 def ensembleTrain(re_player, seeds, save_prefix,
-                  game_num = 1000, save_interval = 100):
-    res = {1.:0, -1.:0}
-    res_order = []
-    t = trange(game_num, desc='Bar desc', leave = True)
+                  batch_num = 1000, save_interval = 100):
+    # with batch training, this function serves to making opponents as needed
+    t = trange(batch_num, desc='Bar desc', leave = True)
+    t.set_description('%03d:%03d ' % (0, 0))
     for i in t:
-        if i % 20 == 0:
-            t.set_description('%03d:%03d ' % (res[1], res[-1]))
-        oppo = random.choice(seeds)
-        #print oppo
-        game_res = re_player.runEp(opponent = oppo.as_func)
-        res[game_res] += 1
-        res_order.append(game_res)
+	batch_res = re_player.runBatch(seeds)
+	t.set_description('%03d:%03d ' % (batch_res[1], batch_res[-1]))
         if i != 0 and i % save_interval == 0:
             re_player.export_val(save_prefix + str(i) + '.pkl')
-            new = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+            new = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
+	                             learn_rate = 0.)
             new.import_val(save_prefix + str(i) + '.pkl')
             seeds.append(new)
     t.set_description('%03d:%03d ' % (res[1], res[-1]))
     re_player.export_val(save_prefix + '_final.pkl')
-    return res, res_order
-    
+    # doesn't return anything
 
 rng = np.random.RandomState(1236) # I'm okay with this
 
-ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0003) 
-ba.import_val('brains/HexBrain2e3.pkl')
+def test(my_name, oppo_name):
+    ################### NOTE: BELOW LEARN RATE 0
+    ba = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0000) 
+    ba.import_val(brain_dir + my_name)
+    
+    ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2, learn_rate = .0)
+    ref_oppo.import_val(brain_dir + oppo_name)
+    #ref_oppo = RandomHexPlayer()
+    
+    if dbg:
+        #ba = RandomHexPlayer()
+        res = ba.runEp(opponent = ref_oppo.as_func, verbose = True)
+        print res
+    else:
+        res, res_order = logGames(ba, ref_oppo, game_num = 100)
+        print res
+        graphWins(res_order, games_over = 50, title = 'tmp_monitor')
 
-dbg = False
-brain_dir = 'brains/'
+def train():
+    ba = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
+                            lmbda = 0.98, learn_rate = .001) 
+    ba.import_val(brain_dir + init_brain)
+    #print 'BRAIN NOT IMPORTED'
 
-print ' ... generating opponents'
-oppos = [RandomHexPlayer()]
-for f_name in os.listdir(brain_dir):
-    if f_name[-3:] != 'pkl': continue
-    op = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
-    op.import_val(brain_dir + f_name)
-    oppos.append(op)
-print len(oppos), 'opponents generated'
+    ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+    ref_oppo.import_val(brain_dir + dbg_oppo_brain)
+    #ref_oppo = RandomHexPlayer()
+    #print 'USING RANDOM HEX PLAYER AS REFERENCE'
 
-ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
-ref_oppo.import_val(brain_dir + 'HexBrain2e3.pkl')
-
-if dbg:
-    res = ba.runEp(opponent = RandomHexPlayer().as_func, verbose = True)
+    oppos = [RandomHexPlayer()]
+    print '... generating opponents'
+    for f_name in os.listdir(brain_dir):
+	if f_name[-3:] != 'pkl': continue
+	op = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
+	op.import_val(brain_dir + f_name)
+	oppos.append(op)
+    print len(oppos), 'opponents generated'
+    res, res_order = ensembleTrain(ba, oppos, brain_dir + new_batch_prefix,
+                                   train_num, 1000)
     print res
-else:
-    res, res_order = ensembleTrain(ba, oppos, brain_dir + 'HBSP01_', 
-                                   5000, 500)
-    print res
-    graphWins(res_order, games_over = 50, title='tmp_monitor')
-    logGames(ba, ref_oppo)
+    graphWins(res_order, games_over = 100, title='tmp_monitor')
+    print logGames(ba, oppos[-10])
+    print logGames(ba, oppos[-50])
+    print logGames(ba, ref_oppo)    
 
-#logGames(ba, RandomHexPlayer())
+if __name__ == '__main__':    
+    #test(init_brain, dbg_oppo_brain)
+    train()

@@ -6,6 +6,10 @@ import sys
 import numpy as np
 from gym import spaces
 from gym.envs.board_game import HexEnv
+# for randomEp func
+import theano
+
+BOARD_SIZE = 11
 
 class ModHexEnv(HexEnv):
     def __init__(self, player_color, opponent, observation_type, illegal_move_mode, board_size):
@@ -81,7 +85,104 @@ class ModHexEnv(HexEnv):
             outfile.write('\n')
 
         if mode != 'human':
-            return outfile    
+            return outfile
+    
+
+class SimHexEnv(ModHexEnv):
+    '''HexEnv used for simulation in MCTS.'''
+    def __init__(self, player_color, opponent, observation_type, \
+                 illegal_move_mode, board_size):
+        super(SimHexEnv, self).__init__(player_color, opponent, observation_type, \
+                                        illegal_move_mode, board_size)
+        self._rand_stream = theano.tensor.shared_randomstreams.RandomStreams()
+    
+    def set_start(self, state):
+        '''This function shall not be in normal HexEnvs, as it should not be
+        allowed for actors to be able to change the state as they want. Thus,
+        this function is only valid for simulation.'''
+        self.done = False
+        self.state = np.copy(state)
+    
+    def runEp(self, players, turn):
+        giveup_move = self.state.shape[1]**2
+        while True:
+            new_move = players[turn].as_func(self.state)
+            if new_move == giveup_move: break
+            self.make_move(self.state, new_move, turn)
+            turn = 1-turn
+        return self.game_finished(self.state)
+    
+    def randomEp(self, turn, lgl_mvs):
+        '''Optimized version of runEp for MC'''
+        np.random.shuffle(lgl_mvs)
+        first = np.zeros((BOARD_SIZE**2,))
+        first[lgl_mvs[::2]] = 1
+        sec = np.zeros((BOARD_SIZE**2,))
+        sec[lgl_mvs[1::2]] = 1
+        self.state[turn] += first.reshape((BOARD_SIZE, BOARD_SIZE))
+        self.state[1-turn] += sec.reshape((BOARD_SIZE, BOARD_SIZE))
+        self.state[2] = np.zeros((BOARD_SIZE, BOARD_SIZE))
+        return self.rand_game_finished(self.state)
+    
+    @staticmethod
+    def get_turn(state):
+        '''In normal HexEnvs, it should not be necessary for one to access
+        who's turn it is, as it is always the player's turn. However, this 
+        is a necessary function in simulation. '''
+        return int(np.sum(state[0]) != np.sum(state[1]))
+    
+    @staticmethod
+    def rand_game_finished(board):
+        # Returns 1 if player 1 wins, -1 if player 2 wins
+        d = board.shape[1]
+
+        inpath = set()
+        newset = set()
+        for i in range(d):
+            if board[0, 0, i] == 1:
+                newset.add(i)
+
+        while len(newset) > 0:
+            for i in range(len(newset)):
+                v = newset.pop()
+                inpath.add(v)
+                cx = v // d
+                cy = v % d
+                # Left
+                if cy > 0 and board[0, cx, cy - 1] == 1:
+                    v = cx * d + cy - 1
+                    if v not in inpath:
+                        newset.add(v)
+                # Right
+                if cy + 1 < d and board[0, cx, cy + 1] == 1:
+                    v = cx * d + cy + 1
+                    if v not in inpath:
+                        newset.add(v)
+                # Up
+                if cx > 0 and board[0, cx - 1, cy] == 1:
+                    v = (cx - 1) * d + cy
+                    if v not in inpath:
+                        newset.add(v)
+                # Down
+                if cx + 1 < d and board[0, cx + 1, cy] == 1:
+                    if cx + 1 == d - 1:
+                        return 1
+                    v = (cx + 1) * d + cy
+                    if v not in inpath:
+                        newset.add(v)
+                # Up Right
+                if cx > 0 and cy + 1 < d and board[0, cx - 1, cy + 1] == 1:
+                    v = (cx - 1) * d + cy + 1
+                    if v not in inpath:
+                        newset.add(v)
+                # Down Left
+                if cx + 1 < d and cy > 0 and board[0, cx + 1, cy - 1] == 1:
+                    if cx + 1 == d - 1:
+                        return 1
+                    v = (cx + 1) * d + cy - 1
+                    if v not in inpath:
+                        newset.add(v)
+        return -1
 
 def HexGameEnv(opponent):
     '''returns ModHexEnv set with player_color random and 
@@ -91,4 +192,4 @@ def HexGameEnv(opponent):
                      opponent = opponent,
                      observation_type = 'numpy3c',
                      illegal_move_mode = 'raise',
-                     board_size = 11)
+                     board_size = BOARD_SIZE)

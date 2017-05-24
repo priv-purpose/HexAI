@@ -5,12 +5,8 @@
 from Env import HexGameEnv
 import random
 import numpy as np
-import time
 from tqdm import trange
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+from itertools import compress
 
 BOARD_SIZE = 11
 
@@ -31,10 +27,10 @@ class RandomHexPlayer(object):
     def as_func(self, board):
         '''shit, board[2] is 2d. change.'''
         blank = np.ndarray.flatten(board[2])
-        poss_moves = [i for i in xrange(BOARD_SIZE**2) if (blank[i] == 1)]
+        poss_moves = list(compress(xrange(BOARD_SIZE**2), blank))
         try:
             return random.choice(poss_moves)
-        except IndexError:
+        except ValueError:
             return BOARD_SIZE**2
 
 class HumanHexPlayer(object):
@@ -48,11 +44,14 @@ class HumanHexPlayer(object):
         board = env.get_board()
         end = env.game_finished(board)
         while not end:
-            ver_num, hor_num = raw_input('Human\'s move? ').split(',')
-            ver_num = int(ver_num, 16)
-            hor_num = int(hor_num, 16)
-            _, rw, end, _ = env.step(11*ver_num+hor_num)
-            env.render()
+            try:
+                ver_num, hor_num = raw_input('Human\'s move? ').split(',')
+                ver_num = int(ver_num, 16)
+                hor_num = int(hor_num, 16)
+                _, rw, end, _ = env.step(BOARD_SIZE*ver_num+hor_num)
+                env.render()
+            except IndexError:
+                print 'Try again.'
         return rw
     
     def as_func(self, board):
@@ -75,6 +74,9 @@ def logGames(player1, player2, game_num = 100):
     return (res[1.], res[-1.]), res_order
 
 def graphWins(res_order, games_over = 20, title = ''):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt    
     '''will plot the win rate from RES_ORDER over GAMES_OVER games.'''
     mod = [max(0, res) for res in res_order]
     avg_res = [float(sum(mod[i:i+games_over]))/games_over
