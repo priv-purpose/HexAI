@@ -20,11 +20,11 @@ LAYER_NUM = 2
 ## Shortcuts
 dbg = False
 brain_dir = 'brains/'
-init_brain = 'HBSP06__final.pkl'
+init_brain = 'HBSP01__final.pkl'
 dbg_oppo_brain = 'HBSP01__final.pkl'
 new_batch_prefix = 'test_batch'
-train_num = 10
-minibatch_size = 100
+train_num = 1000
+minibatch_size = 1
 
 print 'Initialized with', init_brain
 print 'new_batch_prefix:', new_batch_prefix
@@ -194,8 +194,8 @@ class REINFORCEHexPlayer(object):
         prob = prob_layer.output
         self.selected = T.scalar(dtype = 'int32')
         self.g = prob[(0, self.selected)]
-        reward = T.dscalar()
-	batch_size = T.dscalar()
+        reward = T.scalar()
+	batch_size = T.scalar()
         
         # stuff for functions
         param_pre_list = [layer.params for layer in self.layers]
@@ -206,14 +206,16 @@ class REINFORCEHexPlayer(object):
         # functions
         self.f_pass = theano.function(
             inputs = [inpt, self.legal],
-            outputs = prob
+            outputs = prob,
+            allow_input_downcast = True
         )
         
         self.elig_updator = theano.function(
             inputs = [inpt, self.legal, self.selected],
             outputs = None,
             updates = [(elig, lmbda*elig + self.elig_calc(param))
-                       for elig, param in zip(self.eligs, self.params)]
+                       for elig, param in zip(self.eligs, self.params)],
+            allow_input_downcast = True
         )
 	
 	self.elig_finalize = theano.function(
@@ -360,28 +362,28 @@ def test(my_name, oppo_name):
 def train():
     ba = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
                             lmbda = 0.98, learn_rate = .001) 
-    ba.import_val(brain_dir + init_brain)
-    #print 'BRAIN NOT IMPORTED'
+    #ba.import_val(brain_dir + init_brain)
+    print 'BRAIN NOT IMPORTED'
 
     ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
-    ref_oppo.import_val(brain_dir + dbg_oppo_brain)
-    #ref_oppo = RandomHexPlayer()
-    #print 'USING RANDOM HEX PLAYER AS REFERENCE'
+    #ref_oppo.import_val(brain_dir + dbg_oppo_brain)
+    ref_oppo = RandomHexPlayer()
+    print 'USING RANDOM HEX PLAYER AS REFERENCE'
 
     oppos = [RandomHexPlayer()]
-    print '... generating opponents'
+    '''print '... generating opponents'
     for f_name in os.listdir(brain_dir):
 	if f_name[-3:] != 'pkl': continue
 	op = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
 	op.import_val(brain_dir + f_name)
-	oppos.append(op)
+	oppos.append(op)'''
+    print 'NO OPPONENTS LOADED EXCEPT RANDOM'
     print len(oppos), 'opponents generated'
-    res, res_order = ensembleTrain(ba, oppos, brain_dir + new_batch_prefix,
-                                   train_num, 1000)
-    print res
-    graphWins(res_order, games_over = 100, title='tmp_monitor')
-    print logGames(ba, oppos[-10])
-    print logGames(ba, oppos[-50])
+    _ = ensembleTrain(ba, oppos, brain_dir + new_batch_prefix, train_num, 1000)
+    #print res
+    #graphWins(res_order, games_over = 100, title='tmp_monitor')
+    #print logGames(ba, oppos[-10])
+    #print logGames(ba, oppos[-50])
     print logGames(ba, ref_oppo)    
 
 if __name__ == '__main__':    
