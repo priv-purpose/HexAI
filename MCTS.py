@@ -135,21 +135,21 @@ class GenericMCTS(object):
                 ## below two lines are needed for generic case
                 me = self._tree._rollout_policy()
                 op = self._tree._rollout_policy()
-                if not self._sa_dict[a].load: # if lazy loading not already done
-                    self._sa_dict[a].lazy_postpos()
-                sim_pos = self._sa_dict[a]._post_pos
-                sim_hist = self._sa_dict[a]._hist
-                lgl_mvs = self._sa_dict[a]._lgl_mvs
+                if not chosen_edge.load: # if lazy loading not already done
+                    chosen_edge.lazy_postpos()
+                sim_pos = chosen_edge._post_pos
+                sim_hist = chosen_edge._hist
+                lgl_mvs = chosen_edge._lgl_mvs
                 if turn == 0:
-                    '''I'm simulating first right now'''
+                    '''Since 0 made move, 1's turn to play'''
                     self._tree._sim_env.set_start(sim_pos, sim_hist)
                     #res = self._tree._sim_env.randomEp(1, lgl_mvs)
-                    res = self._tree._sim_env.runEp([me, op], 0)
+                    res = self._tree._sim_env.runEp([me, op], 1)
                 elif turn == 1:
-                    '''I'm simulating later right now'''
+                    '''Since 1 made move, 0's turn to play'''
                     self._tree._sim_env.set_start(sim_pos, sim_hist)
                     #res = -self._tree._sim_env.randomEp(0, lgl_mvs) # note the -
-                    res = -self._tree._sim_env.runEp([op, me], 1) # note the -
+                    res = -self._tree._sim_env.runEp([op, me], 0) # note the -
                 
                 # check if edge needs expansion (don't expand when end-pos)
                 if (chosen_edge.N() > self._tree._n_thr and 
@@ -160,7 +160,7 @@ class GenericMCTS(object):
 
             # now res is always defined, so let's update stuff
             assert res != 0
-            self._node_n += 1.
+            self._node_n += 1
             chosen_edge.update(res)
             return res
         
@@ -195,7 +195,7 @@ class GenericMCTS(object):
     
     def sim(self):
         l_i = 0
-        for i in trange(20000):
+        for i in trange(30000):
             self._root.sim()
         #self.show()
     
@@ -217,7 +217,7 @@ class GenericMCTS(object):
             self._root = self._root._sa_dict[new_a].get_leaf()
             new_n = self._root._node_n
             print ('MCTS expected your move with %.2f %% confidence' % \
-                   (float(100*new_n)/prev_n))
+                   (float(100*new_n)/1))
         self.sim()
         a = self._root.max_act()
         # below is temporary too. (you shouldn't directly access _sa_dict)

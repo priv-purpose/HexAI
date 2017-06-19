@@ -2,7 +2,7 @@
 
 '''Random Player - For reference'''
 
-from Env import HexGameEnv
+from Env import HexGameEnv, SimHexEnv
 import random
 import numpy as np
 from tqdm import trange
@@ -42,10 +42,10 @@ class RolloutHexPlayer01(RandomHexPlayer):
         board = env.get_board()
         end = env.game_finished(board)
         while not end:
-            _, rw, end, _ = env.step(self.as_func(board))
+            _, rw, end, _ = env.step(self.as_func(board, env.move_history))
         return rw
     
-    def as_func(self, board, hist):
+    def as_funco(self, board, hist):
         '''Blocks "connected" territory'''
         nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)]
         if len(hist) > 0:
@@ -55,12 +55,16 @@ class RolloutHexPlayer01(RandomHexPlayer):
             around = [(past_move[0] + x, past_move[1] + y) for x, y in nearby]
             answs = []
             for idx in xrange(len(nearby_1d)):
+                m_idx = (idx + 1) % 6
+                e_idx = (idx + 2) % 6
                 if around[idx][0] < 0 or around[idx][1] < 0: continue
                 if around[idx][0] > 10 or around[idx][1] > 10: continue
+                if around[e_idx][0] < 0 or around[e_idx][1] < 0: continue
+                if around[e_idx][0] > 10 or around[e_idx][1] > 10: continue                
                 if (board[my_color][around[idx]] == 1 and
-                    board[2][around[(idx + 1) % 6]] == 1 and
-                    board[my_color][around[(idx + 2) % 6]] == 1):
-                    answs.append(nearby_1d[(idx + 1) % 6])
+                    board[2][around[m_idx]] == 1 and
+                    board[my_color][around[e_idx]] == 1):
+                    answs.append(nearby_1d[m_idx])
             if len(answs) != 0:
                 return random.choice(answs)
         return super(RolloutHexPlayer01, self).as_func(board)
@@ -83,7 +87,7 @@ class HumanHexPlayer(object):
                 _, rw, end, _ = env.step(BOARD_SIZE*ver_num+hor_num)
                 env.render()
                 print env.move_history
-            except ZeroDivisionError:
+            except ValueError:
                 print 'Try again.'
         return rw
     
@@ -124,6 +128,6 @@ def graphWins(res_order, games_over = 20, title = ''):
 
 ## Example usage of logGames (TODO: delete when you have main.py implemented).
 if __name__ == '__main__':
-    a = HumanHexPlayer()
+    a = RolloutHexPlayer01()
     b = RolloutHexPlayer01()
-    print logGames(a, b)
+    a.runEp(opponent = b.as_func)

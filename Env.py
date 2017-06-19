@@ -168,14 +168,15 @@ class SimHexEnv(ModHexEnv):
         this function is only valid for simulation.'''
         self.done = False
         self.state = np.copy(state)
-        self.history = [] if history is None else history
+        self.move_history = [] if history is None else history[:]
     
     def runEp(self, players, turn):
         giveup_move = self.state.shape[1]**2
         while True:
-            new_move = players[turn].as_func(self.state, self.move_history)
+            new_move = players[turn].as_funco(self.state, self.move_history)
             if new_move == giveup_move: break
             self.make_move(self.state, new_move, turn)
+            self.move_history.append(new_move)
             turn = 1-turn
         return self.game_finished(self.state)
     
