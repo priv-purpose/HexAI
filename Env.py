@@ -12,6 +12,11 @@ import theano
 BOARD_SIZE = 11
 
 class ModHexEnv(HexEnv):
+    '''Modified in many ways from original HexEnv...
+    1. Render changed
+    2. Any player can come first
+    3. action sequence also part of state'''
+    
     def __init__(self, player_color, opponent, observation_type, illegal_move_mode, board_size):
         """
         Args:
@@ -65,7 +70,7 @@ class ModHexEnv(HexEnv):
 
         # Let the opponent play if it's not the agent's turn
         if self.player_color != self.to_play:
-            a = self.opponent_policy(self.state)
+            a = self.opponent_policy(self.state, self.move_history)
             HexEnv.make_move(self.state, a, HexEnv.BLACK)
             self.move_history.append(a)
             self.to_play = HexEnv.WHITE
@@ -98,7 +103,7 @@ class ModHexEnv(HexEnv):
             self.move_history.append(action)
 
         # Opponent play
-        a = self.opponent_policy(self.state)
+        a = self.opponent_policy(self.state, self.move_history)
 
         # if HexEnv.pass_move(self.board_size, action):
         #     pass
@@ -163,11 +168,12 @@ class SimHexEnv(ModHexEnv):
         this function is only valid for simulation.'''
         self.done = False
         self.state = np.copy(state)
+        self.history = [] if history is None else history
     
     def runEp(self, players, turn):
         giveup_move = self.state.shape[1]**2
         while True:
-            new_move = players[turn].as_func(self.state)
+            new_move = players[turn].as_func(self.state, self.move_history)
             if new_move == giveup_move: break
             self.make_move(self.state, new_move, turn)
             turn = 1-turn
