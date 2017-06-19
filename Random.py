@@ -45,7 +45,13 @@ class RolloutHexPlayer01(RandomHexPlayer):
             _, rw, end, _ = env.step(self.as_func(board, env.move_history))
         return rw
     
-    def as_funco(self, board, hist):
+    def lgl_handler(self, lgl_mvs):
+        try:
+            return random.choice(lgl_mvs)
+        except IndexError:
+            return BOARD_SIZE**2
+
+    def as_funco(self, board, hist, lgl_mvs):
         '''Blocks "connected" territory'''
         nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)]
         if len(hist) > 0:
@@ -54,20 +60,18 @@ class RolloutHexPlayer01(RandomHexPlayer):
             my_color = int(1 - board[1][past_move])
             around = [(past_move[0] + x, past_move[1] + y) for x, y in nearby]
             answs = []
+            if not (1 <= past_move[0] < BOARD_SIZE-1) or not (1 <= past_move[1] < BOARD_SIZE-1):
+                return self.lgl_handler(lgl_mvs)
             for idx in xrange(len(nearby_1d)):
                 m_idx = (idx + 1) % 6
                 e_idx = (idx + 2) % 6
-                if around[idx][0] < 0 or around[idx][1] < 0: continue
-                if around[idx][0] > 10 or around[idx][1] > 10: continue
-                if around[e_idx][0] < 0 or around[e_idx][1] < 0: continue
-                if around[e_idx][0] > 10 or around[e_idx][1] > 10: continue                
                 if (board[my_color][around[idx]] == 1 and
                     board[2][around[m_idx]] == 1 and
                     board[my_color][around[e_idx]] == 1):
                     answs.append(nearby_1d[m_idx])
             if len(answs) != 0:
                 return random.choice(answs)
-        return super(RolloutHexPlayer01, self).as_func(board)
+        return self.lgl_handler(lgl_mvs)
 
 class HumanHexPlayer(object):
     '''Human Hex Player'''

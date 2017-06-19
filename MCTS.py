@@ -145,12 +145,12 @@ class GenericMCTS(object):
                     '''Since 0 made move, 1's turn to play'''
                     self._tree._sim_env.set_start(sim_pos, sim_hist)
                     #res = self._tree._sim_env.randomEp(1, lgl_mvs)
-                    res = self._tree._sim_env.runEp([me, op], 1)
+                    res = self._tree._sim_env.runEp([me, op], 1, lgl_mvs)
                 elif turn == 1:
                     '''Since 1 made move, 0's turn to play'''
                     self._tree._sim_env.set_start(sim_pos, sim_hist)
                     #res = -self._tree._sim_env.randomEp(0, lgl_mvs) # note the -
-                    res = -self._tree._sim_env.runEp([op, me], 0) # note the -
+                    res = -self._tree._sim_env.runEp([op, me], 0, lgl_mvs) # note the -
                 
                 # check if edge needs expansion (don't expand when end-pos)
                 if (chosen_edge.N() > self._tree._n_thr and 
