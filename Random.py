@@ -33,6 +33,23 @@ class RandomHexPlayer(object):
         except IndexError:
             return BOARD_SIZE**2
 
+class RolloutHexPlayer01(object):
+    def __init__(self):
+        pass
+    
+    def runEp(self, opponent = 'random'):
+        env = HexGameEnv(opponent)
+        board = env.get_board()
+        end = env.game_finished(board)
+        while not end:
+            _, rw, end, _ = env.step(self.as_func(board))
+        return rw
+    
+    def as_func(self, board):
+        '''Blocks "connected" territory'''
+        print board
+        return 0
+
 class HumanHexPlayer(object):
     '''Human Hex Player'''
     def __init__(self):
@@ -50,6 +67,7 @@ class HumanHexPlayer(object):
                 hor_num = int(hor_num, 16)
                 _, rw, end, _ = env.step(BOARD_SIZE*ver_num+hor_num)
                 env.render()
+                print env.move_history
             except IndexError:
                 print 'Try again.'
         return rw
@@ -90,7 +108,7 @@ def graphWins(res_order, games_over = 20, title = ''):
     plt.savefig(title+'.png')
 
 ## Example usage of logGames (TODO: delete when you have main.py implemented).
-#if __name__ == '__main__':
-    #a = RandomHexPlayer()
-    #b = RandomHexPlayer()
-    #print logGames(a, b)
+if __name__ == '__main__':
+    a = HumanHexPlayer()
+    b = RandomHexPlayer()
+    print logGames(a, b)

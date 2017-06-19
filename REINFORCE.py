@@ -311,6 +311,7 @@ class REINFORCEHexPlayer(object):
         f = open(fname, 'rb')
         vals = cPickle.load(f)
         for p, val in zip(self.params, vals):
+	    print val.shape
             p.set_value(val)
         f.close()
 
@@ -362,7 +363,7 @@ def test(my_name, oppo_name):
 def train():
     ba = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
                             lmbda = 0.98, learn_rate = .001) 
-    #ba.import_val(brain_dir + init_brain)
+    ba.import_val(brain_dir + init_brain)
     print 'BRAIN NOT IMPORTED'
 
     ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)

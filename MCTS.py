@@ -128,8 +128,8 @@ class GenericMCTS(object):
                 # above must be - because what good to child is bad for me
             else:
                 ## below two lines are needed for generic case
-                #me = self._tree._rollout_policy()
-                #op = self._tree._rollout_policy()
+                me = self._tree._rollout_policy()
+                op = self._tree._rollout_policy()
                 if not self._sa_dict[a].load: # if lazy loading not already done
                     self._sa_dict[a].lazy_postpos()
                 sim_pos = self._sa_dict[a]._post_pos
@@ -138,10 +138,12 @@ class GenericMCTS(object):
                     '''I'm simulating first right now'''
                     self._tree._sim_env.set_start(sim_pos)
                     res = self._tree._sim_env.randomEp(1, lgl_mvs)
+                    #res = self._tree._sim_env.runEp([me, op], 0)
                 elif turn == 1:
                     '''I'm simulating later right now'''
                     self._tree._sim_env.set_start(sim_pos)
                     res = -self._tree._sim_env.randomEp(0, lgl_mvs) # note the -
+                    #res = -self._tree._sim_env.runEp([op, me], 1) # note the -
                 
                 # check if edge needs expansion (don't expand when end-pos)
                 if (chosen_edge.N() > self._tree._n_thr and 
@@ -186,7 +188,7 @@ class GenericMCTS(object):
     
     def sim(self):
         l_i = 0
-        for i in trange(100000):
+        for i in trange(200000):
             self._root.sim()
         #self.show()
     

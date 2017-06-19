@@ -36,6 +36,7 @@ class ModHexEnv(HexEnv):
 
         self.opponent = opponent
         self._seed()
+        self.move_history = []
 
         assert observation_type in ['numpy3c']
         self.observation_type = observation_type
@@ -55,6 +56,66 @@ class ModHexEnv(HexEnv):
         '''Gets board state back
         funny that this simple function does not exist...'''
         return self.state
+    
+    def _reset(self):
+        self.state = np.zeros((3, self.board_size, self.board_size))
+        self.state[2, :, :] = 1.0
+        self.to_play = HexEnv.BLACK
+        self.done = False
+
+        # Let the opponent play if it's not the agent's turn
+        if self.player_color != self.to_play:
+            a = self.opponent_policy(self.state)
+            HexEnv.make_move(self.state, a, HexEnv.BLACK)
+            self.move_history.append(a)
+            self.to_play = HexEnv.WHITE
+        return self.state
+    
+    def get_move_hist(self):
+        return self.move_history
+    
+    def _step(self, action):
+        assert self.to_play == self.player_color
+        # If already terminal, then don't do anything
+        if self.done:
+            return self.state, 0., True, {'state': self.state}
+
+        # if HexEnv.pass_move(self.board_size, action):
+        #     pass
+        if HexEnv.resign_move(self.board_size, action):
+            return self.state, -1, True, {'state': self.state}
+        elif not HexEnv.valid_move(self.state, action):
+            if self.illegal_move_mode == 'raise':
+                raise
+            elif self.illegal_move_mode == 'lose':
+                # Automatic loss on illegal move
+                self.done = True
+                return self.state, -1., True, {'state': self.state}
+            else:
+                raise error.Error('Unsupported illegal move action: {}'.format(self.illegal_move_mode))
+        else:
+            HexEnv.make_move(self.state, action, self.player_color)
+            self.move_history.append(action)
+
+        # Opponent play
+        a = self.opponent_policy(self.state)
+
+        # if HexEnv.pass_move(self.board_size, action):
+        #     pass
+
+        # Making move if there are moves left
+        if a is not None:
+            if HexEnv.resign_move(self.board_size, a):
+                return self.state, 1, True, {'state': self.state}
+            else:
+                HexEnv.make_move(self.state, a, 1 - self.player_color)
+                self.move_history.append(a)
+
+        reward = HexEnv.game_finished(self.state)
+        if self.player_color == HexEnv.WHITE:
+            reward = - reward
+        self.done = reward != 0
+        return self.state, reward, self.done, {'state': self.state}    
     
     def _render(self, mode='human', close=False):
         if close:
@@ -96,7 +157,7 @@ class SimHexEnv(ModHexEnv):
                                         illegal_move_mode, board_size)
         self._rand_stream = theano.tensor.shared_randomstreams.RandomStreams()
     
-    def set_start(self, state):
+    def set_start(self, state, history = None):
         '''This function shall not be in normal HexEnvs, as it should not be
         allowed for actors to be able to change the state as they want. Thus,
         this function is only valid for simulation.'''
