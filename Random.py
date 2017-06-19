@@ -87,7 +87,7 @@ class HumanHexPlayer(object):
                 _, rw, end, _ = env.step(BOARD_SIZE*ver_num+hor_num)
                 env.render()
                 print env.move_history
-            except ValueError:
+            except (IndexError, ValueError, TypeError) as e:
                 print 'Try again.'
         return rw
     
@@ -130,4 +130,4 @@ def graphWins(res_order, games_over = 20, title = ''):
 if __name__ == '__main__':
     a = RolloutHexPlayer01()
     b = RolloutHexPlayer01()
-    a.runEp(opponent = b.as_func)
+    print logGames(a, b)
