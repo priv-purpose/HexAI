@@ -5,7 +5,7 @@ from itertools import imap
 # -----| BELOW IS FOR TESTING |-----
 import cProfile
 from Env import SimHexEnv
-from Random import RandomHexPlayer, HumanHexPlayer
+from Random import RandomHexPlayer, HumanHexPlayer, RolloutHexPlayer01
 from tqdm import trange
 from REINFORCE import REINFORCEHexPriorGenerator
 # -----|         END          |-----
@@ -19,9 +19,11 @@ class GenericMCTS(object):
     Assumption 1: assumes that board is using numpy3c encoding'''
     class TreeNode(object):
         class TreeEdge(object):
-            def __init__(self, pos, action, parent):
+            def __init__(self, pos, action, hist, parent):
                 self._pos = pos
                 self._act = action
+                self._hist = hist[:]
+                self._hist.append(action)
                 self._N = 0.
                 self._W = 0.
                 self._leaf = None
@@ -70,21 +72,24 @@ class GenericMCTS(object):
                 else:
                     print 'SIM!'
                     sim_pos = np.copy(self._pos)
+                    sim_hist = self._hist[:]
                     self._parent._tree._sim_env.make_move(
                         sim_pos, self._act, self._parent._turn
                     )
                     self._leaf = self._parent._tree.TreeNode(
                         pos = sim_pos,
+                        hist = sim_hist,
                         tree = self._parent._tree,
                         turn = 1-self._parent._turn
                     )
                     return self._leaf
         
-        def __init__(self, pos, tree, turn):
+        def __init__(self, pos, hist, tree, turn):
             self._pos = pos
+            self._hist = hist[:]
             self._tree = tree
             self._turn = turn
-            self._sa_dict = {a: self.TreeEdge(pos, a, self)
+            self._sa_dict = {a: self.TreeEdge(pos, a, self._hist, self)
                              for a in tree._sim_env.get_possible_actions(pos)}
             self._node_n = 0.
             # performance
@@ -129,25 +134,29 @@ class GenericMCTS(object):
                 # above must be - because what good to child is bad for me
             else:
                 ## below two lines are needed for generic case
-                #me = self._tree._rollout_policy()
-                #op = self._tree._rollout_policy()
+                me = self._tree._rollout_policy()
+                op = self._tree._rollout_policy()
                 if not self._sa_dict[a].load: # if lazy loading not already done
                     self._sa_dict[a].lazy_postpos()
                 sim_pos = self._sa_dict[a]._post_pos
+                sim_hist = self._sa_dict[a]._hist
                 lgl_mvs = self._sa_dict[a]._lgl_mvs
                 if turn == 0:
                     '''I'm simulating first right now'''
-                    self._tree._sim_env.set_start(sim_pos)
-                    res = self._tree._sim_env.randomEp(1, lgl_mvs)
+                    self._tree._sim_env.set_start(sim_pos, sim_hist)
+                    #res = self._tree._sim_env.randomEp(1, lgl_mvs)
+                    res = self._tree._sim_env.runEp([me, op], 0)
                 elif turn == 1:
                     '''I'm simulating later right now'''
-                    self._tree._sim_env.set_start(sim_pos)
-                    res = -self._tree._sim_env.randomEp(0, lgl_mvs) # note the -
+                    self._tree._sim_env.set_start(sim_pos, sim_hist)
+                    #res = -self._tree._sim_env.randomEp(0, lgl_mvs) # note the -
+                    res = -self._tree._sim_env.runEp([op, me], 1) # note the -
                 
                 # check if edge needs expansion (don't expand when end-pos)
                 if (chosen_edge.N() > self._tree._n_thr and 
                     not self._tree._sim_env.game_finished(sim_pos)):
-                    new_node = self._tree.make_node(sim_pos, self._tree, 1-turn)
+                    new_node = self._tree.make_node(sim_pos, sim_hist, 
+                                                    self._tree, 1-turn)
                     chosen_edge.add_leaf(new_node)
 
             # now res is always defined, so let's update stuff
@@ -181,9 +190,9 @@ class GenericMCTS(object):
         self._sim_env = sim_env
         self._rollout_policy = rollout_policy
     
-    def make_node(self, pos, tree, turn):
+    def make_node(self, pos, hist, tree, turn):
         '''stupid hack to make Nodes from within nodes'''
-        return self.TreeNode(pos, tree, turn)
+        return self.TreeNode(pos, hist, tree, turn)
     
     def sim(self):
         l_i = 0
@@ -194,10 +203,11 @@ class GenericMCTS(object):
     def show(self):
         self._root.show(0)
     
-    def make_move(self, board):
+    def make_move(self, board, hist):
         # root-moving algorithm
         if self._root == None:
-            self._root = self.TreeNode(board, self, self._sim_env.get_turn(board))
+            self._root = self.TreeNode(board, hist, self, 
+                                       self._sim_env.get_turn(board))
         else:
             diff = self._root._pos[2].flatten() == board[2].flatten()
             new_a = list(diff).index(False)
@@ -216,13 +226,14 @@ class GenericMCTS(object):
             self._root = self._root._sa_dict[a].get_leaf()
         except AssertionError:
             self._root = None # shouldn't play after this point
+        print self._root._hist
         return a
     
     def update(self, ns, reward):
         return
     
-    def as_func(self, board):
-        return self.make_move(board)
+    def as_func(self, board, hist = None):
+        return self.make_move(board, hist)
 
 class PriorMCTS(GenericMCTS):
     '''Generic vanilla MCTS without NN enhancement, WITH prior distribution
@@ -274,7 +285,7 @@ ba.import_val('brains/GTX2B02_25000.pkl')
 env = SimHexEnv('black', 'random', 'numpy3c', 'raise', 11)
 #print env.randomEp(0)
 #env.render()
-dong = PriorMCTS(2., 50, env, RandomHexPlayer, ba)
+dong = GenericMCTS(.1, 20, env, RolloutHexPlayer01)
 me = HumanHexPlayer()
 cProfile.run('me.runEp(opponent = dong.as_func)', sort='cumtime')
 
