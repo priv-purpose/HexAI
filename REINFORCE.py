@@ -18,13 +18,14 @@ BOARD_SIZE = 11
 LAYER_NUM = 2
 
 ## Shortcuts
-dbg = False
+dbg = True
+mode = 2
 brain_dir = 'brains/'
-init_brain = 'HBSP01__final.pkl'
-dbg_oppo_brain = 'HBSP01__final.pkl'
-new_batch_prefix = 'test_batch'
-train_num = 1000
-minibatch_size = 1
+init_brain = 'GTX2B02_25000.pkl'
+dbg_oppo_brain = 'GTX2B01__final.pkl'
+new_batch_prefix = 'GTX2B02_'
+train_num = 30000
+minibatch_size = 100
 
 print 'Initialized with', init_brain
 print 'new_batch_prefix:', new_batch_prefix
@@ -148,7 +149,7 @@ class RuleKeepSoftmaxLayer(object):
 
 class REINFORCEHexPlayer(object):
     '''Hex Player that makes random legal moves'''
-    def __init__(self, filter_num, layer_num, lmbda = 1., learn_rate = .0003,
+    def __init__(self, filter_num, layer_num, lmbda = 1., learn_rate = .0,
                  base_r = 0.):
         '''3s below are hardcoded...'''
         self.lmbda = lmbda
@@ -201,7 +202,13 @@ class REINFORCEHexPlayer(object):
         param_pre_list = [layer.params for layer in self.layers]
         self.params = list(itertools.chain.from_iterable(param_pre_list))
         elig_pre_list = [layer.eligs for layer in self.layers]
-        self.eligs = list(itertools.chain.from_iterable(elig_pre_list))
+        self.accum_eligs = list(itertools.chain.from_iterable(elig_pre_list))
+        self.temp_eligs = [theano.shared(
+                               value = np.zeros(
+                                   elig.get_value().shape,
+                                   dtype = theano.config.floatX), 
+                               borrow = True)
+                           for elig in self.accum_eligs]
         
         # functions
         self.f_pass = theano.function(
@@ -214,7 +221,7 @@ class REINFORCEHexPlayer(object):
             inputs = [inpt, self.legal, self.selected],
             outputs = None,
             updates = [(elig, lmbda*elig + self.elig_calc(param))
-                       for elig, param in zip(self.eligs, self.params)],
+                       for elig, param in zip(self.temp_eligs, self.params)],
             allow_input_downcast = True
         )
 	
@@ -222,20 +229,33 @@ class REINFORCEHexPlayer(object):
 	    inputs = [reward],
 	    outputs = None,
 	    updates = [(elig, (reward-self.base_r)*elig)
-	               for elig in self.eligs]
+	               for elig in self.temp_eligs]
 	)
         
+        self.Aelig_updator = theano.function(
+            inputs = [],
+            outputs = None,
+            updates = [(Aelig, Aelig + Telig)
+                       for Aelig, Telig in zip(self.accum_eligs, self.temp_eligs)]
+        )
+
         self.val_updator = theano.function(
             inputs = [batch_size],
             outputs = None,
             updates = [(param, self.val_calc(param, elig, batch_size))
-                       for elig, param in zip(self.eligs, self.params)]
+                       for elig, param in zip(self.accum_eligs, self.params)] #TODO
+        )
+
+        self.Aelig_clear = theano.function(
+            inputs = [],
+            outputs = None,
+            updates = [(Aelig, 0*Aelig) for Aelig in self.accum_eligs]
         )
         
         self.elig_clear = theano.function(
             inputs = [],
             outputs = None,
-            updates = [(elig, 0*elig) for elig in self.eligs]
+            updates = [(elig, 0*elig) for elig in self.temp_eligs]
         )
     
     def elig_calc(self, theta):
@@ -279,6 +299,8 @@ class REINFORCEHexPlayer(object):
                 raw_input('Enter to see next move')
         #self.val_updator(rw) # gone, because of batch learning
         self.elig_finalize(rw) # finalize elig with reward
+        self.Aelig_updator()
+        self.elig_clear()
         return rw
     
     def runBatch(self, oppos, batch_size = minibatch_size):
@@ -289,7 +311,7 @@ class REINFORCEHexPlayer(object):
 	    res[tmp_res] += 1
 	# now, batch_size-worth elig is kept in eligs. this is resolved:
 	self.val_updator(batch_size)
-	self.elig_clear()
+        self.Aelig_clear()
 	# now elig is clear, and we are ready for next batch. 
 	# return res to show progress. 
 	return res
@@ -311,6 +333,7 @@ class REINFORCEHexPlayer(object):
         f = open(fname, 'rb')
         vals = cPickle.load(f)
         for p, val in zip(self.params, vals):
+            print val.shape
             p.set_value(val)
         f.close()
 
@@ -361,14 +384,14 @@ def test(my_name, oppo_name):
 
 def train():
     ba = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
-                            lmbda = 0.98, learn_rate = .001) 
+                            lmbda = 0.98, learn_rate = .0001) 
     #ba.import_val(brain_dir + init_brain)
     print 'BRAIN NOT IMPORTED'
 
     ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
-    #ref_oppo.import_val(brain_dir + dbg_oppo_brain)
-    ref_oppo = RandomHexPlayer()
-    print 'USING RANDOM HEX PLAYER AS REFERENCE'
+    ref_oppo.import_val(brain_dir + dbg_oppo_brain)
+    #ref_oppo = RandomHexPlayer()
+    #print 'USING RANDOM HEX PLAYER AS REFERENCE'
 
     oppos = [RandomHexPlayer()]
     '''print '... generating opponents'
@@ -377,15 +400,24 @@ def train():
 	op = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
 	op.import_val(brain_dir + f_name)
 	oppos.append(op)'''
-    print 'NO OPPONENTS LOADED EXCEPT RANDOM'
+    print 'NO OPPONENTS LOADED FROM BRAINS/'
     print len(oppos), 'opponents generated'
-    _ = ensembleTrain(ba, oppos, brain_dir + new_batch_prefix, train_num, 1000)
+    _ = ensembleTrain(ba, oppos, brain_dir + new_batch_prefix, train_num, 500)
     #print res
     #graphWins(res_order, games_over = 100, title='tmp_monitor')
     #print logGames(ba, oppos[-10])
     #print logGames(ba, oppos[-50])
-    print logGames(ba, ref_oppo)    
+    print logGames(ba, ref_oppo)   
 
-if __name__ == '__main__':    
-    #test(init_brain, dbg_oppo_brain)
-    train()
+def humanPlay():
+    comp = REINFORCEHexPlayer(filter_num = 50, layer_num = 2) 
+    human = HumanHexPlayer()
+    human.runEp(opponent = comp.as_func)
+
+if __name__ == '__main__':
+    if mode == 1:
+    	train()
+    elif mode == 2:
+        test(init_brain, dbg_oppo_brain)
+    elif mode == 3:
+        humanPlay()

@@ -50,7 +50,7 @@ class HumanHexPlayer(object):
                 hor_num = int(hor_num, 16)
                 _, rw, end, _ = env.step(BOARD_SIZE*ver_num+hor_num)
                 env.render()
-            except IndexError:
+            except (IndexError, ValueError, TypeError) as e:
                 print 'Try again.'
         return rw
     

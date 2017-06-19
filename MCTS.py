@@ -109,8 +109,9 @@ class GenericMCTS(object):
         
         def max_act(self):
             '''this is to extract the best action'''
-            print [(a, self._sa_dict[a].N(), self._sa_dict[a].Q()) 
-                   for a in self._sa_dict.keys()]
+            moves = [(a, self._sa_dict[a].N(), self._sa_dict[a].Q()) 
+                     for a in self._sa_dict.keys()]
+            print list(reversed(sorted(moves, key = lambda x: x[1])[-10:]))
             best = max([(a, self._sa_dict[a].N())
                         for a in self._sa_dict.keys()], 
                        key = lambda x: x[1])
@@ -186,7 +187,7 @@ class GenericMCTS(object):
     
     def sim(self):
         l_i = 0
-        for i in trange(100000):
+        for i in trange(50000):
             self._root.sim()
         #self.show()
     
@@ -267,13 +268,13 @@ class PriorMCTS(GenericMCTS):
         assert hasattr(prior_generator, 'prior_dist')
         self._prior_generator = prior_generator
 
-#ba = REINFORCEHexPriorGenerator(filter_num = 50, layer_num = 2, learn_rate = .0000)
-#ba.import_val('brains/HBSP02__final.pkl')
+ba = REINFORCEHexPriorGenerator(filter_num = 50, layer_num = 2, learn_rate = .0000)
+ba.import_val('brains/GTX2B02_25000.pkl')
 
 env = SimHexEnv('black', 'random', 'numpy3c', 'raise', 11)
 #print env.randomEp(0)
 #env.render()
-dong = GenericMCTS(.1, 20, env, RandomHexPlayer)
+dong = PriorMCTS(2., 50, env, RandomHexPlayer, ba)
 me = HumanHexPlayer()
 cProfile.run('me.runEp(opponent = dong.as_func)', sort='cumtime')
 
