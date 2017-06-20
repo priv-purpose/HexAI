@@ -35,6 +35,8 @@ class RandomHexPlayer(object):
 
 class RolloutHexPlayer01(RandomHexPlayer):
     def __init__(self):
+        self.nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)]
+        self.nearby_1d_ref = np.array([BOARD_SIZE*x + y for x, y in self.nearby])
         pass
     
     def runEp(self, opponent = 'random'):
@@ -53,22 +55,29 @@ class RolloutHexPlayer01(RandomHexPlayer):
 
     def as_funco(self, board, hist, lgl_mvs):
         '''Blocks "connected" territory'''
-        nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)]
         if len(hist) > 0:
-            nearby_1d = [hist[-1] + BOARD_SIZE*x + y for x, y in nearby]    
             past_move = (hist[-1] / BOARD_SIZE, hist[-1] % BOARD_SIZE)
-            my_color = int(1 - board[1][past_move])
-            around = [(past_move[0] + x, past_move[1] + y) for x, y in nearby]
-            answs = []
             if not (1 <= past_move[0] < BOARD_SIZE-1) or not (1 <= past_move[1] < BOARD_SIZE-1):
                 return self.lgl_handler(lgl_mvs)
-            for idx in xrange(len(nearby_1d)):
+            nearby_1d = hist[-1] + self.nearby_1d_ref
+            my_color = int(1 - board[1][past_move])
+            around = [(past_move[0] + x, past_move[1] + y) for x, y in self.nearby]
+            answs = []
+            idx = 0
+            while idx < 6:
                 m_idx = (idx + 1) % 6
                 e_idx = (idx + 2) % 6
-                if (board[my_color][around[idx]] == 1 and
-                    board[2][around[m_idx]] == 1 and
-                    board[my_color][around[e_idx]] == 1):
-                    answs.append(nearby_1d[m_idx])
+                if board[my_color][around[idx]] == 1:
+                    if board[2][around[m_idx]] == 1:
+                        if board[my_color][around[e_idx]] == 1:
+                    	    answs.append(nearby_1d[m_idx])
+                    	    idx += 2
+                        else:
+                            idx += 3
+                    else:
+                        idx += 1
+                else:
+                    idx += 1
             if len(answs) != 0:
                 return random.choice(answs)
         return self.lgl_handler(lgl_mvs)

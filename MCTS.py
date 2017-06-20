@@ -196,7 +196,7 @@ class GenericMCTS(object):
     
     def sim(self):
         l_i = 0
-        for i in trange(30000):
+        for i in trange(50000):
             self._root.sim()
         #self.show()
     
@@ -240,18 +240,19 @@ class PriorMCTS(GenericMCTS):
     Assumption 1: assumes that board is using numpy3c encoding'''
     class TreeNode(GenericMCTS.TreeNode):
         class TreeEdge(GenericMCTS.TreeNode.TreeEdge):
-            def __init__(self, pos, action, prior_prob, parent):
-                super(PriorMCTS.TreeNode.TreeEdge, self).__init__(pos, action, parent)
+            def __init__(self, pos, action, hist, prior_prob, parent):
+                super(PriorMCTS.TreeNode.TreeEdge, self).__init__(pos, action, hist, parent)
                 self._P = prior_prob
             
             def P(self):
                 return self._P
         
-        def __init__(self, pos, tree, turn):
+        def __init__(self, pos, hist, tree, turn):
             self._pos = pos
+            self._hist = hist[:]
             self._tree = tree
             prior_dist = self._tree._prior_generator.prior_dist(pos)
-            self._sa_dict = {a: self.TreeEdge(pos, a, prior_dist[a], self)
+            self._sa_dict = {a: self.TreeEdge(pos, a, hist, prior_dist[a], self)
                              for a in tree._sim_env.get_possible_actions(pos)}
             self._turn = turn
             self._node_n = 0.
@@ -280,12 +281,13 @@ class PriorMCTS(GenericMCTS):
         self._prior_generator = prior_generator
 
 ba = REINFORCEHexPriorGenerator(filter_num = 50, layer_num = 2, learn_rate = .0000)
-ba.import_val('brains/GTX2B02_25000.pkl')
+ba.import_val('brains/GTX2B02_15000.pkl')
 
 env = SimHexEnv('black', 'random', 'numpy3c', 'raise', 11)
 #print env.randomEp(0)
 #env.render()
-dong = GenericMCTS(.1, 20, env, RolloutHexPlayer01)
+#dong = GenericMCTS(.1, 20, env, RolloutHexPlayer01)
+dong = PriorMCTS(2., 20, env, RolloutHexPlayer01, ba)
 me = HumanHexPlayer()
 cProfile.run('me.runEp(opponent = dong.as_func)', sort='cumtime')
 

@@ -18,14 +18,14 @@ BOARD_SIZE = 11
 LAYER_NUM = 2
 
 ## Shortcuts
-dbg = True
-mode = 2
+dbg = False
+mode = 1
 brain_dir = 'brains/'
 init_brain = 'GTX2B02_25000.pkl'
 dbg_oppo_brain = 'GTX2B01__final.pkl'
-new_batch_prefix = 'GTX2B02_'
+new_batch_prefix = 'GTX3B01_'
 train_num = 30000
-minibatch_size = 100
+minibatch_size = 50
 
 print 'Initialized with', init_brain
 print 'new_batch_prefix:', new_batch_prefix
@@ -316,7 +316,7 @@ class REINFORCEHexPlayer(object):
 	# return res to show progress. 
 	return res
     
-    def as_func(self, board):
+    def as_func(self, board, hist):
         lgl_mvs = self.legal_moves(board)
         probs = self.f_pass(board, lgl_mvs)[0]
         select = np.random.choice(range(BOARD_SIZE**2), p = probs)
@@ -385,7 +385,7 @@ def test(my_name, oppo_name):
 def train():
     ba = REINFORCEHexPlayer(filter_num = 50, layer_num = LAYER_NUM, 
                             lmbda = 0.98, learn_rate = .001) 
-    ba.import_val(brain_dir + init_brain)
+    #ba.import_val(brain_dir + init_brain)
     print 'BRAIN NOT IMPORTED'
 
     ref_oppo = REINFORCEHexPlayer(filter_num = 50, layer_num = 2)
@@ -393,7 +393,7 @@ def train():
     #ref_oppo = RandomHexPlayer()
     #print 'USING RANDOM HEX PLAYER AS REFERENCE'
 
-    oppos = [RandomHexPlayer()]
+    oppos = [RolloutHexPlayer01()]
     '''print '... generating opponents'
     for f_name in os.listdir(brain_dir):
 	if f_name[-3:] != 'pkl': continue
