@@ -6,7 +6,7 @@ from Env import HexGameEnv, SimHexEnv
 import random
 import numpy as np
 from tqdm import trange
-from itertools import compress
+import ctypes
 
 BOARD_SIZE = 11
 
@@ -24,12 +24,10 @@ class RandomHexPlayer(object):
             _, rw, end, _ = env.step(random.choice(possible_acts))
         return rw
     
-    def as_func(self, board, hist = None):
-        '''shit, board[2] is 2d. change.'''
-        blank = np.ndarray.flatten(board[2])
-        poss_moves = list(compress(xrange(BOARD_SIZE**2), blank))
+    def as_func(self, board, hist, lgl_mvs):
+        '''MMMMMMMMMM.... only for rollout'''
         try:
-            return random.choice(poss_moves)
+            return random.choice(lgl_mvs)
         except IndexError:
             return BOARD_SIZE**2
 
@@ -37,7 +35,13 @@ class RolloutHexPlayer01(RandomHexPlayer):
     def __init__(self):
         self.nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)]
         self.nearby_1d_ref = np.array([BOARD_SIZE*x + y for x, y in self.nearby])
-        pass
+        '''self.trylib = ctypes.cdll.LoadLibrary("./testlib.so")
+        self.tryfun = self.trylib.calc_response
+        self.par1 = np.empty((11, 11), dtype = np.int)
+        self.hum = ctypes.c_void_p(self.par1.ctypes.data)
+        self.lst = np.zeros((6,), dtype = np.int)
+        self.zrs = np.zeros((6,), dtype = np.int)
+        self.ble = ctypes.c_void_p(self.lst.ctypes.data)'''
     
     def runEp(self, opponent = 'random'):
         env = HexGameEnv(opponent)
@@ -53,14 +57,23 @@ class RolloutHexPlayer01(RandomHexPlayer):
         except IndexError:
             return BOARD_SIZE**2
 
-    def as_funco(self, board, hist, lgl_mvs):
+    def as_func(self, board, hist, lgl_mvs):
         '''Blocks "connected" territory'''
         if len(hist) > 0:
             past_move = (hist[-1] / BOARD_SIZE, hist[-1] % BOARD_SIZE)
+            my_color = 2*board[1][past_move] - 1
+            '''self.par1[:] = board[0] - board[1]
+            self.lst[:] = self.zrs
+            res = self.tryfun(self.hum, 1, past_move[0], past_move[1], self.ble)
+            if not res:
+                return self.lgl_handler(lgl_mvs)
+            else:
+                assert self.lst[0] % 256 < 121, self.lst[0] % 256
+                return self.lst[0]'''
+            my_color = int(1 - board[1][past_move])
             if not (1 <= past_move[0] < BOARD_SIZE-1) or not (1 <= past_move[1] < BOARD_SIZE-1):
                 return self.lgl_handler(lgl_mvs)
             nearby_1d = hist[-1] + self.nearby_1d_ref
-            my_color = int(1 - board[1][past_move])
             around = [(past_move[0] + x, past_move[1] + y) for x, y in self.nearby]
             answs = []
             idx = 0

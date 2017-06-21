@@ -174,7 +174,7 @@ class SimHexEnv(ModHexEnv):
         giveup_move = self.state.shape[1]**2
         lgl_mvs_cpy = lgl_mvs[:]
         while True:
-            new_move = players[turn].as_funco(self.state, self.move_history, lgl_mvs_cpy)
+            new_move = players[turn].as_func(self.state, self.move_history, lgl_mvs_cpy)
             if new_move == giveup_move: break
             self.make_move(self.state, new_move, turn)
             self.move_history.append(new_move)

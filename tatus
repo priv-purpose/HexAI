@@ -1,0 +1,98 @@
+[1mdiff --git a/Env.py b/Env.py[m
+[1mindex cdd7117..00b5c6c 100644[m
+[1m--- a/Env.py[m
+[1m+++ b/Env.py[m
+[36m@@ -174,7 +174,7 @@[m [mclass SimHexEnv(ModHexEnv):[m
+         giveup_move = self.state.shape[1]**2[m
+         lgl_mvs_cpy = lgl_mvs[:][m
+         while True:[m
+[31m-            new_move = players[turn].as_funco(self.state, self.move_history, lgl_mvs_cpy)[m
+[32m+[m[32m            new_move = players[turn].as_func(self.state, self.move_history, lgl_mvs_cpy)[m[41m[m
+             if new_move == giveup_move: break[m
+             self.make_move(self.state, new_move, turn)[m
+             self.move_history.append(new_move)[m
+[1mdiff --git a/MCTS.py b/MCTS.py[m
+[1mindex 52d7767..8640889 100644[m
+[1m--- a/MCTS.py[m
+[1m+++ b/MCTS.py[m
+[36m@@ -286,8 +286,8 @@[m [mba.import_val('brains/GTX2B02_15000.pkl')[m
+ env = SimHexEnv('black', 'random', 'numpy3c', 'raise', 11)[m
+ #print env.randomEp(0)[m
+ #env.render()[m
+[31m-#dong = GenericMCTS(.1, 20, env, RolloutHexPlayer01)[m
+[31m-dong = PriorMCTS(2., 20, env, RolloutHexPlayer01, ba)[m
+[32m+[m[32mdong = GenericMCTS(.1, 20, env, RolloutHexPlayer01)[m[41m[m
+[32m+[m[32m#dong = PriorMCTS(2., 20, env, RolloutHexPlayer01, ba)[m[41m[m
+ me = HumanHexPlayer()[m
+ cProfile.run('me.runEp(opponent = dong.as_func)', sort='cumtime')[m
+ [m
+[1mdiff --git a/Random.py b/Random.py[m
+[1mindex c826b8f..fe94735 100644[m
+[1m--- a/Random.py[m
+[1m+++ b/Random.py[m
+[36m@@ -6,7 +6,7 @@[m [mfrom Env import HexGameEnv, SimHexEnv[m
+ import random[m
+ import numpy as np[m
+ from tqdm import trange[m
+[31m-from itertools import compress[m
+[32m+[m[32mimport ctypes[m
+ [m
+ BOARD_SIZE = 11[m
+ [m
+[36m@@ -24,12 +24,10 @@[m [mclass RandomHexPlayer(object):[m
+             _, rw, end, _ = env.step(random.choice(possible_acts))[m
+         return rw[m
+     [m
+[31m-    def as_func(self, board, hist = None):[m
+[31m-        '''shit, board[2] is 2d. change.'''[m
+[31m-        blank = np.ndarray.flatten(board[2])[m
+[31m-        poss_moves = list(compress(xrange(BOARD_SIZE**2), blank))[m
+[32m+[m[32m    def as_func(self, board, hist, lgl_mvs):[m[41m[m
+[32m+[m[32m        '''MMMMMMMMMM.... only for rollout'''[m[41m[m
+         try:[m
+[31m-            return random.choice(poss_moves)[m
+[32m+[m[32m            return random.choice(lgl_mvs)[m[41m[m
+         except IndexError:[m
+             return BOARD_SIZE**2[m
+ [m
+[36m@@ -37,7 +35,13 @@[m [mclass RolloutHexPlayer01(RandomHexPlayer):[m
+     def __init__(self):[m
+         self.nearby = [(-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1), (0, -1)][m
+         self.nearby_1d_ref = np.array([BOARD_SIZE*x + y for x, y in self.nearby])[m
+[31m-        pass[m
+[32m+[m[32m        '''self.trylib = ctypes.cdll.LoadLibrary("./testlib.so")[m
+[32m+[m[32m        self.tryfun = self.trylib.calc_response[m
+[32m+[m[32m        self.par1 = np.empty((11, 11), dtype = np.int)[m
+[32m+[m[32m        self.hum = ctypes.c_void_p(self.par1.ctypes.data)[m
+[32m+[m[32m        self.lst = np.zeros((6,), dtype = np.int)[m
+[32m+[m[32m        self.zrs = np.zeros((6,), dtype = np.int)[m
+[32m+[m[32m        self.ble = ctypes.c_void_p(self.lst.ctypes.data)'''[m
+     [m
+     def runEp(self, opponent = 'random'):[m
+         env = HexGameEnv(opponent)[m
+[36m@@ -53,14 +57,23 @@[m [mclass RolloutHexPlayer01(RandomHexPlayer):[m
+         except IndexError:[m
+             return BOARD_SIZE**2[m
+ [m
+[31m-    def as_funco(self, board, hist, lgl_mvs):[m
+[32m+[m[32m    def as_func(self, board, hist, lgl_mvs):[m[41m[m
+         '''Blocks "connected" territory'''[m
+         if len(hist) > 0:[m
+             past_move = (hist[-1] / BOARD_SIZE, hist[-1] % BOARD_SIZE)[m
+[32m+[m[32m            my_color = 2*board[1][past_move] - 1[m
+[32m+[m[32m            '''self.par1[:] = board[0] - board[1][m
+[32m+[m[32m            self.lst[:] = self.zrs[m
+[32m+[m[32m            res = self.tryfun(self.hum, 1, past_move[0], past_move[1], self.ble)[m
+[32m+[m[32m            if not res:[m
+[32m+[m[32m                return self.lgl_handler(lgl_mvs)[m
+[32m+[m[32m            else:[m
+[32m+[m[32m                assert self.lst[0] % 256 < 121, self.lst[0] % 256[m
+[32m+[m[32m                return self.lst[0]'''[m
+[32m+[m[32m            my_color = int(1 - board[1][past_move])[m
+             if not (1 <= past_move[0] < BOARD_SIZE-1) or not (1 <= past_move[1] < BOARD_SIZE-1):[m
+                 return self.lgl_handler(lgl_mvs)[m
+             nearby_1d = hist[-1] + self.nearby_1d_ref[m
+[31m-            my_color = int(1 - board[1][past_move])[m
+             around = [(past_move[0] + x, past_move[1] + y) for x, y in self.nearby][m
+             answs = [][m
+             idx = 0[m
